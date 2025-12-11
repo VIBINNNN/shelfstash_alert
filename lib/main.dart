@@ -58,12 +58,21 @@ class ShelfStashApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primaryColor: primary,
+        // keep the app's accent/primary color
         colorScheme: ColorScheme.fromSwatch(primarySwatch: createMaterialColor(primary)).copyWith(secondary: primary),
-        scaffoldBackgroundColor: Colors.white,
-        appBarTheme: const AppBarTheme(backgroundColor: Colors.white, elevation: 0, iconTheme: IconThemeData(color: Colors.black)),
+        // global background -> black per request
+        scaffoldBackgroundColor: Colors.black,
+        // AppBar dark themed so icons/text are visible
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.black,
+          elevation: 0,
+          iconTheme: IconThemeData(color: Colors.white),
+          titleTextStyle: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+        ),
         textTheme: const TextTheme(
-          titleLarge: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-          bodyMedium: TextStyle(fontSize: 14),
+          titleLarge: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.white),
+          bodyMedium: TextStyle(fontSize: 14, color: Colors.white),
+          bodyLarge: TextStyle(color: Colors.white),
         ),
       ),
       home: const HomeShell(),
@@ -114,13 +123,15 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    // bottom nav icons should be white/green on dark background
     return Scaffold(
       body: SafeArea(child: pages[_selectedIndex]),
       bottomNavigationBar: BottomNavigationBar(
+        backgroundColor: Colors.black,
         currentIndex: _selectedIndex,
         onTap: _onNavTap,
         selectedItemColor: Theme.of(context).colorScheme.secondary,
-        unselectedItemColor: Colors.grey[600],
+        unselectedItemColor: Colors.grey[400],
         items: [
           const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(
@@ -175,9 +186,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   late html.AudioElement _preloadedAudio;
   bool _audioPrimedFlag = false;
 
-  late AnimationController _animController;
-  late Animation<Color?> _gradA;
-  late Animation<Color?> _gradB;
+  // new: single controller for the white-streak animation
+  late AnimationController _streakController;
 
   // pending notifications that had audio suppressed because audio wasn't primed yet
   final List<String> _pendingAudioNotificationIds = [];
@@ -193,10 +203,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     _preloadedAudio = html.AudioElement('assets/sounds/alert.mp3')..preload = 'auto';
     _preloadedAudio.load();
 
-    // animated gradient
-    _animController = AnimationController(vsync: this, duration: const Duration(seconds: 6))..repeat(reverse: true);
-    _gradA = ColorTween(begin: const Color(0xFF00A896), end: const Color(0xFF007A63)).animate(_animController);
-    _gradB = ColorTween(begin: const Color(0xFFFF7A00), end: const Color(0xFFFFB830)).animate(_animController);
+    // streak animation controller (repeats)
+    _streakController = AnimationController(vsync: this, duration: const Duration(seconds: 5))..repeat();
 
     // visibility listener: prevent spurious alerts for tiny switches
     html.document.onVisibilityChange.listen((_) {
@@ -219,7 +227,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   @override
   void dispose() {
     _pollTimer?.cancel();
-    _animController.dispose();
+    _streakController.dispose();
     if (triggerExpiryCheck == _checkExpiryAndNotify) triggerExpiryCheck = null;
     if (globalEnsureAudioPrimed == ensureAudioPrimed) globalEnsureAudioPrimed = null;
     super.dispose();
@@ -315,10 +323,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        backgroundColor: Colors.grey[900],
+        content: Text(message, style: const TextStyle(color: Colors.white)),
         duration: const Duration(seconds: 4),
         action: SnackBarAction(
           label: 'View',
+          textColor: Colors.green[300],
           onPressed: () {
             final shell = context.findAncestorStateOfType<_HomeShellState>();
             if (shell != null) {
@@ -361,7 +371,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
       // run check immediately to create notifications if needed
       _checkExpiryAndNotify();
-
       // IMPORTANT: do NOT call global saved confirmation here.
       // The dialog itself shows the "Item saved" UI and local confetti.
     }
@@ -392,7 +401,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.black87,
+                color: Colors.green[700],
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text('Item saved', style: TextStyle(color: Colors.white)),
@@ -437,11 +446,11 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       content.add(
         Row(
           children: [
-            Expanded(child: Text(r, style: const TextStyle(fontWeight: FontWeight.w700))),
+            Expanded(child: Text(r, style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white))),
             const SizedBox(width: 8),
             Text(
               haveAll ? 'Ready' : '$haveCount/${ingredients.length}',
-              style: TextStyle(color: haveAll ? Colors.green : Colors.orange),
+              style: TextStyle(color: haveAll ? Colors.green[300] : Colors.orange),
             ),
           ],
         ),
@@ -450,16 +459,17 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       content.add(
         Text(
           'Ingredients: ${ingredients.join(', ')}',
-          style: TextStyle(color: Colors.grey[700], fontSize: 13),
+          style: TextStyle(color: Colors.grey[350], fontSize: 13),
         ),
       );
-      content.add(const Divider());
+      content.add(const Divider(color: Colors.grey));
     });
 
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Recipe Suggestions'),
+        backgroundColor: Colors.green[700],
+        title: const Text('Recipe Suggestions', style: TextStyle(color: Colors.white)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -507,6 +517,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     const totalSavedKg = 12;
     const points = 1200;
     return Card(
+      color: Colors.green[700], // changed from white to green box
       margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       elevation: 2,
@@ -533,11 +544,11 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     ],
                   ),
                   const SizedBox(height: 10),
-                  const Text('Pantry Overview', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const Text('Pantry Overview', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
                   const SizedBox(height: 8),
-                  const LinearProgressIndicator(value: 0.6, minHeight: 8),
+                  const LinearProgressIndicator(value: 0.6, minHeight: 8, color: Colors.greenAccent),
                   const SizedBox(height: 6),
-                  Text('Smart recipe suggestions below', style: TextStyle(color: Colors.grey[700], fontSize: 12)),
+                  Text('Smart recipe suggestions below', style: TextStyle(color: Colors.grey[300], fontSize: 12)),
                 ],
               ),
             ),
@@ -553,9 +564,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+        Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[300])),
         const SizedBox(height: 4),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
       ],
     );
   }
@@ -565,7 +576,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       width: 72,
       height: 72,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.secondary,
+        color: Colors.green[600],
         shape: BoxShape.circle,
       ),
       child: Center(
@@ -579,6 +590,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
   Widget _buildRecipeCard() {
     return Card(
+      color: Colors.green[700], // changed
       margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
@@ -589,11 +601,11 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Smart Recipe Suggestion', style: TextStyle(fontWeight: FontWeight.w700)),
+                  const Text('Smart Recipe Suggestion', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
                   const SizedBox(height: 6),
                   Text(
                     'Cook before it\'s too late! Try something new today!',
-                    style: TextStyle(color: Colors.grey[700]),
+                    style: TextStyle(color: Colors.grey[300]),
                   ),
                   const SizedBox(height: 8),
                   ElevatedButton(onPressed: _cookNow, child: const Text('Cook Now')),
@@ -604,8 +616,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             Container(
               width: 70,
               height: 70,
-              color: Colors.grey[200],
-              child: Icon(Icons.restaurant, size: 36, color: Colors.grey[600]),
+              color: Colors.green[600], // changed from grey[200]
+              child: Icon(Icons.restaurant, size: 36, color: Colors.white),
             ),
           ],
         ),
@@ -640,45 +652,49 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     return ValueListenableBuilder<List<PantryItem>>(
       valueListenable: pantryNotifier,
       builder: (_, list, __) {
-        if (list.isEmpty) return const Center(child: Text('No pantry items found.'));
+        if (list.isEmpty) return const Center(child: Text('No pantry items found.', style: TextStyle(color: Colors.white)));
         return ListView.separated(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
           itemCount: list.length,
-          separatorBuilder: (_, __) => const Divider(),
+          separatorBuilder: (_, __) => const Divider(color: Colors.grey),
           itemBuilder: (context, i) {
             final it = list[i];
             final daysLeft = it.expiry.difference(DateTime.now()).inDays;
             final subtitle = it.expiry.isBefore(DateTime.now())
                 ? 'Expired ${-daysLeft} day(s) ago'
                 : 'Expires in $daysLeft day(s)';
-            return ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-              title: Text(it.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: Text(subtitle),
-              trailing: Text(
-                it.expiry.toLocal().toString().split(' ').first,
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => ItemDetailPage(
-                    item: it,
-                    onSave: (updated) {
-                      // update pantry shared list
-                      final cur = List<PantryItem>.from(pantryNotifier.value);
-                      final idx = cur.indexWhere((e) => e.id == updated.id);
-                      if (idx != -1) {
-                        cur[idx] = updated;
-                        pantryNotifier.value = cur;
-                      }
-                      // also update notifications list if present
-                      final curN = List<PantryItem>.from(notificationsNotifier.value);
-                      final nidx = curN.indexWhere((n) => n.id == updated.id);
-                      if (nidx != -1) {
-                        curN[nidx] = updated;
-                        notificationsNotifier.value = curN;
-                      }
-                    },
+            return Card(
+              color: Colors.green[700], // item cards turned green
+              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                title: Text(it.name, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+                subtitle: Text(subtitle, style: const TextStyle(color: Colors.white70)),
+                trailing: Text(
+                  it.expiry.toLocal().toString().split(' ').first,
+                  style: TextStyle(color: Colors.grey[200]),
+                ),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ItemDetailPage(
+                      item: it,
+                      onSave: (updated) {
+                        // update pantry shared list
+                        final cur = List<PantryItem>.from(pantryNotifier.value);
+                        final idx = cur.indexWhere((e) => e.id == updated.id);
+                        if (idx != -1) {
+                          cur[idx] = updated;
+                          pantryNotifier.value = cur;
+                        }
+                        // also update notifications list if present
+                        final curN = List<PantryItem>.from(notificationsNotifier.value);
+                        final nidx = curN.indexWhere((n) => n.id == updated.id);
+                        if (nidx != -1) {
+                          curN[nidx] = updated;
+                          notificationsNotifier.value = curN;
+                        }
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -689,58 +705,90 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     );
   }
 
+  // helper: the moving white streak painter widget
+  Widget _buildMovingStreak() {
+    return AnimatedBuilder(
+      animation: _streakController,
+      builder: (context, child) {
+        final t = _streakController.value; // 0..1
+        // compute x based on t, move left->right then loop
+        final screenW = MediaQuery.of(context).size.width;
+        final streakWidth = max(80.0, screenW * 0.18);
+        final x = (screenW + streakWidth) * t - streakWidth;
+        return Positioned(
+          left: x,
+          top: -60,
+          child: Transform.rotate(
+            angle: -0.35, // angle the streak slightly for effect
+            child: Container(
+              width: streakWidth,
+              height: MediaQuery.of(context).size.height * 1.6,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.white.withOpacity(0.0),
+                    Colors.white.withOpacity(0.07),
+                    Colors.white.withOpacity(0.12),
+                    Colors.white.withOpacity(0.07),
+                    Colors.white.withOpacity(0.0),
+                  ],
+                ),
+                // slight blur effect could be added with BackdropFilter, but keep simple for performance
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        AnimatedBuilder(
-          animation: _animController,
-          builder: (context, child) {
-            return Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [_gradA.value ?? Colors.white, _gradB.value ?? Colors.white],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+        // static black background (global scaffoldBackgroundColor is black too)
+        Container(color: Colors.black),
+        // moving white streak overlay that animates across all pages
+        _buildMovingStreak(),
+
+        // Rest of UI sits above the streak
+        // Use transparent scaffold backgrounds so streak is visible behind
+        Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            title: Row(
+              children: [
+                const Text('ShelfStash', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(width: 8),
+                Icon(Icons.kitchen, color: Theme.of(context).colorScheme.secondary),
+              ],
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.search),
+                onPressed: () {},
               ),
-              child: Scaffold(
-                backgroundColor: Colors.transparent,
-                appBar: AppBar(
-                  title: Row(
-                    children: [
-                      const Text('ShelfStash',
-                          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 8),
-                      Icon(Icons.kitchen, color: Theme.of(context).colorScheme.secondary),
-                    ],
-                  ),
-                  actions: [
-                    IconButton(
-                      icon: const Icon(Icons.search, color: Colors.black),
-                      onPressed: () {},
-                    ),
-                  ],
-                ),
-                body: Column(
-                  children: [
-                    // banner to enable sound if needed
-                    ValueListenableBuilder<List<PantryItem>>(
-                      valueListenable: notificationsNotifier,
-                      builder: (_, __, ___) => _buildEnableSoundBanner(),
-                    ),
-                    _buildOverviewCard(),
-                    _buildRecipeCard(),
-                    _buildControlsAboveList(),
-                    const SizedBox(height: 6),
-                    Expanded(child: _buildPantryList()),
-                  ],
-                ),
+            ],
+          ),
+          body: Column(
+            children: [
+              // banner to enable sound if needed
+              ValueListenableBuilder<List<PantryItem>>(
+                valueListenable: notificationsNotifier,
+                builder: (_, __, ___) => _buildEnableSoundBanner(),
               ),
-            );
-          },
+              _buildOverviewCard(),
+              _buildRecipeCard(),
+              _buildControlsAboveList(),
+              const SizedBox(height: 6),
+              Expanded(child: _buildPantryList()),
+            ],
+          ),
         ),
-        // Confetti overlay (currently unused for Add dialog)
+
+        // Confetti overlay (keeps confetti drawing above everything)
         ConfettiOverlay(key: _confettiKey),
       ],
     );
@@ -767,13 +815,14 @@ class NotificationsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Notifications', style: TextStyle(color: Colors.black)),
-        leading: Navigator.canPop(context) ? const BackButton(color: Colors.black) : null,
+        title: const Text('Notifications', style: TextStyle(color: Colors.white)),
+        leading: Navigator.canPop(context) ? const BackButton(color: Colors.white) : null,
         actions: [
           IconButton(
             tooltip: 'Dismiss all notifications',
-            icon: const Icon(Icons.clear_all, color: Colors.black),
+            icon: const Icon(Icons.clear_all),
             onPressed: () {
               _dismissAll();
               ScaffoldMessenger.of(context)
@@ -787,7 +836,7 @@ class NotificationsPage extends StatelessWidget {
         child: ValueListenableBuilder<List<PantryItem>>(
           valueListenable: notificationsNotifier,
           builder: (_, list, __) {
-            if (list.isEmpty) return const Center(child: Text('No notifications.'));
+            if (list.isEmpty) return const Center(child: Text('No notifications.', style: TextStyle(color: Colors.white)));
             return ListView.builder(
               itemCount: list.length,
               itemBuilder: (context, i) {
@@ -797,11 +846,12 @@ class NotificationsPage extends StatelessWidget {
                     ? '${it.name} has expired'
                     : '${it.name} is expiring in ${daysLeft <= 0 ? "<1" : daysLeft} day(s)';
                 return Card(
+                  color: Colors.green[700], // green boxes
                   margin: const EdgeInsets.symmetric(vertical: 6),
                   child: ListTile(
-                    title: Text(it.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: Text(text),
-                    trailing: Text(it.expiry.toLocal().toString().split(' ').first),
+                    title: Text(it.name, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white)),
+                    subtitle: Text(text, style: const TextStyle(color: Colors.white70)),
+                    trailing: Text(it.expiry.toLocal().toString().split(' ').first, style: TextStyle(color: Colors.grey[200])),
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => ItemDetailPage(
@@ -930,25 +980,28 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
     final expired = _expiry.isBefore(DateTime.now());
     final daysLeft = _expiry.difference(DateTime.now()).inDays;
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text(widget.item.name, style: const TextStyle(color: Colors.black)),
-        leading: const BackButton(color: Colors.black),
+        title: Text(widget.item.name, style: const TextStyle(color: Colors.white)),
+        leading: const BackButton(color: Colors.white),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Edit item', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const Text('Edit item', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
             const SizedBox(height: 12),
             TextField(
               controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Item name', border: OutlineInputBorder()),
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(labelText: 'Item name', border: const OutlineInputBorder(), fillColor: Colors.green[700], filled: true, labelStyle: const TextStyle(color: Colors.white70)),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _notesController,
-              decoration: const InputDecoration(labelText: 'Notes', border: OutlineInputBorder()),
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(labelText: 'Notes', border: const OutlineInputBorder(), fillColor: Colors.green[700], filled: true, labelStyle: const TextStyle(color: Colors.white70)),
             ),
             const SizedBox(height: 12),
             Row(
@@ -959,7 +1012,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
                   label: const Text('Pick expiry date'),
                 ),
                 const SizedBox(width: 12),
-                Text(_expiry.toLocal().toString().split(' ').first),
+                Text(_expiry.toLocal().toString().split(' ').first, style: const TextStyle(color: Colors.white)),
               ],
             ),
             const SizedBox(height: 18),
@@ -979,7 +1032,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
               ],
             ),
             const SizedBox(height: 12),
-            Text(expired ? 'Expired ${-daysLeft} day(s) ago' : 'Expires in $daysLeft day(s)'),
+            Text(expired ? 'Expired ${-daysLeft} day(s) ago' : 'Expires in $daysLeft day(s)', style: const TextStyle(color: Colors.white)),
           ],
         ),
       ),
@@ -996,9 +1049,10 @@ class ProfilePage extends StatelessWidget {
   Widget build(BuildContext context) {
     _controller.text = usernameNotifier.value;
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Profile', style: TextStyle(color: Colors.black)),
-        leading: Navigator.canPop(context) ? const BackButton(color: Colors.black) : null,
+        title: const Text('Profile', style: TextStyle(color: Colors.white)),
+        leading: Navigator.canPop(context) ? const BackButton(color: Colors.white) : null,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -1007,20 +1061,24 @@ class ProfilePage extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 36,
-              backgroundColor: Colors.grey[200],
-              child: const Icon(Icons.person, size: 40),
+              backgroundColor: Colors.green[600],
+              child: const Icon(Icons.person, size: 40, color: Colors.white),
             ),
             const SizedBox(height: 12),
-            const Text('Display name (change below)', style: TextStyle(fontWeight: FontWeight.w700)),
+            const Text('Display name (change below)', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
             const SizedBox(height: 6),
             Row(
               children: [
                 Expanded(
                   child: TextField(
+                    style: const TextStyle(color: Colors.white),
                     controller: _controller,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
                       hintText: 'Enter display name',
+                      hintStyle: TextStyle(color: Colors.white70),
+                      filled: true,
+                      fillColor: Colors.green[700],
                     ),
                   ),
                 ),
@@ -1040,11 +1098,11 @@ class ProfilePage extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            const Divider(),
+            const Divider(color: Colors.grey),
             const SizedBox(height: 8),
-            const Text('Achievements', style: TextStyle(fontWeight: FontWeight.w700)),
+            const Text('Achievements', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
             const SizedBox(height: 6),
-            const Text('Badges collected: 3'),
+            const Text('Badges collected: 3', style: TextStyle(color: Colors.white)),
           ],
         ),
       ),
@@ -1240,7 +1298,7 @@ class _ItemEditDialogState extends State<ItemEditDialog> with SingleTickerProvid
           return ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: Container(
-              color: Colors.white,
+              color: Colors.green[700], // changed from white
               width: dialogWidth,
               height: dialogHeight,
               child: Stack(
@@ -1255,19 +1313,19 @@ class _ItemEditDialogState extends State<ItemEditDialog> with SingleTickerProvid
                     ),
 
                   // Content centered
-                  Positioned.fill(
+                  const Positioned.fill(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Large green check icon
-                          Icon(Icons.check_circle, color: Colors.green, size: 96),
-                          const SizedBox(height: 12),
-                          const Text(
+                          // Large white check icon (visible on green)
+                          Icon(Icons.check_circle, color: Colors.white, size: 96),
+                          SizedBox(height: 12),
+                          Text(
                             'Item saved',
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.black),
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white),
                           ),
                         ],
                       ),
@@ -1279,7 +1337,7 @@ class _ItemEditDialogState extends State<ItemEditDialog> with SingleTickerProvid
                     right: 4,
                     top: 4,
                     child: IconButton(
-                      icon: const Icon(Icons.close, color: Colors.black),
+                      icon: const Icon(Icons.close, color: Colors.white),
                       onPressed: _onClosePressedEarly,
                       tooltip: 'Close',
                     ),
@@ -1294,13 +1352,14 @@ class _ItemEditDialogState extends State<ItemEditDialog> with SingleTickerProvid
 
     // Normal edit UI
     return AlertDialog(
-      title: const Text('Add item'),
+      backgroundColor: Colors.green[700], // changed
+      title: const Text('Add item', style: TextStyle(color: Colors.white)),
       content: SingleChildScrollView(
         child: Column(
           children: [
-            TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Item name')),
+            TextField(controller: _nameController, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Item name', labelStyle: TextStyle(color: Colors.white70))),
             const SizedBox(height: 10),
-            TextField(controller: _notesController, decoration: const InputDecoration(labelText: 'Notes')),
+            TextField(controller: _notesController, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Notes', labelStyle: TextStyle(color: Colors.white70))),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -1310,7 +1369,7 @@ class _ItemEditDialogState extends State<ItemEditDialog> with SingleTickerProvid
                   label: const Text('Pick expiry date'),
                 ),
                 const SizedBox(width: 12),
-                Text(_expiry.toLocal().toString().split(' ').first),
+                Text(_expiry.toLocal().toString().split(' ').first, style: const TextStyle(color: Colors.white)),
               ],
             ),
           ],
@@ -1528,3 +1587,4 @@ class _ConfettiPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ConfettiPainter oldDelegate) => true;
 }
+
